@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Save Our Earth Pro - Kelompok 6</title>
+    <style>
+        :root { --green: #2ecc71; --yellow: #f1c40f; --red: #e74c3c; --blue: #3498db; --dark: #1a1a2e; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; touch-action: none; }
+        body { font-family: 'Poppins', sans-serif; background: var(--dark); margin: 0; display: flex; justify-content: center; align-items: center; height: 100dvh; overflow: hidden; }
+        
+        #game-container { 
+width: 100%; 
+max-width: 450px; 
+height: 100%; 
+background: #2c3e50; 
+position: relative; 
+display: flex; 
+flex-direction: column; 
+border: 4px solid #fff; 
+border-radius: 10px; 
+}
+
+        /* Level Backgrounds */
+        .bg-level1 { background-image: url('taman.png'); background-size: cover; background-position: center; }
+        .bg-level2 { background-image: url('hutan.png'); background-size: cover; background-position: center; }
+        .bg-level3 { background-image: url('rumah.png'); background-size: cover; background-position: center; }
+
+        .overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.9); z-index: 100; display: none; flex-direction: column; align-items: center; justify-content: center; color: white; padding: 25px; text-align: center; }
+        .active { display: flex; }
+        
+        /* HUD Style */
+        .hud { padding: 12px; display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.8); color: white; z-index: 60; border-bottom: 3px solid var(--green); }
+        .stat-box { display: flex; flex-direction: column; align-items: center; }
+        .stat-label { font-size: 0.6rem; text-transform: uppercase; color: var(--yellow); }
+
+        #world { flex: 1; position: relative; overflow: hidden; }
+        
+        /* Player Sprite Animation */
+    
+#player{
+width:64px;
+height:64px;
+position:absolute;
+
+background-image:url("karakter.png");
+background-size:640px 256px;
+background-repeat:no-repeat;
+
+image-rendering:pixelated;
+}
+        /* Item & Obstacle Style */
+        .item { position: absolute; font-size: 32px; z-index: 10; width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; transition: transform 0.2s; }
+        .item[data-stage="tree"] { font-size: 65px !important; transform: translateY(-20px); filter: drop-shadow(0 0 10px var(--green)); }
+        .obs { position: absolute; font-size: 35px; z-index: 20; filter: drop-shadow(0 0 5px var(--red)); }
+
+        /* Controls */
+        #controls { height: 180px; background: #0f172a; display: grid; grid-template-areas: ". up ." "left . right" ". down ."; justify-content: center; align-content: center; gap: 12px; padding: 15px; }
+        .btn-ctrl { width: 60px; height: 60px; background: #1e293b; color: white; border: 2px solid #334155; border-radius: 50%; font-size: 24px; box-shadow: 0 4px #000; transition: 0.1s; }
+        .btn-ctrl:active { transform: scale(0.9); box-shadow: 0 0px #000; background: var(--blue); }
+
+        .btn-main { padding: 15px 40px; background: var(--green); color: white; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; box-shadow: 0 5px #1a7d42; margin-top: 20px; }
+        
+        .particle { position: absolute; pointer-events: none; animation: explode 0.5s ease-out forwards; }
+        @keyframes explode { to { transform: translate(var(--x), var(--y)); opacity: 0; } }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="menu-screen" class="overlay active">
+        <h1 style="color: var(--yellow); font-size: 2.2rem; margin: 0;">SAVE OUR EARTH</h1>
+        <p style="color: var(--green); font-weight: bold;">KELOMPOK 6 X RPL</p>
+        <button class="btn-main" onclick="initLevel(1)">MULAI MISI</button>
+    </div>
+
+    <div class="hud">
+        <div class="stat-box">
+            <span class="stat-label">Skor</span>
+            <span id="score-txt" style="font-size: 1.2rem; font-weight: bold;">0</span>
+        </div>
+        <div class="stat-box">
+            <span id="lvl-txt" style="color: var(--yellow); font-weight: bold;">MISI 1</span>
+            <small>REKOR: <span id="hi-score">0</span></small>
+        </div>
+        <div class="stat-box">
+            <span class="stat-label">Waktu</span>
+            <span id="timer-txt" style="font-size: 1.2rem; font-weight: bold; color: var(--red);">30</span>
+        </div>
+    </div>
+    
+    
+        <div id="world">
+    <div id="player"></div>
+
+    </div>
+
+    <div id="controls">
+        <button class="btn-ctrl" style="grid-area: up" id="up">▲</button>
+        <button class="btn-ctrl" style="grid-area: left" id="left">◀</button>
+        <button class="btn-ctrl" style="grid-area: right" id="right">▶</button>
+        <button class="btn-ctrl" style="grid-area: down" id="down">▼</button>
+    </div>
+
+    <div id="end-screen" class="overlay">
+        <h1 id="end-title">MISI BERHASIL!</h1>
+        <p id="edu-msg" style="font-size: 0.9rem; margin-bottom: 20px;"></p>
+        <button id="next-btn" class="btn-main">LANJUT</button>
+    </div>
+</div>
+
+<script>
+    const player = document.getElementById('player');
+    const world = document.getElementById('world');
+    let px = 50, py = 50, score = 0, time = 30, currentLevel = 1, isPlaying = false;
+    let moveInterval, timerInterval, obsInterval, spriteInterval, animFrame = 0, currentDir = 'idle';
+
+
+
+
+
+
+
+
+
+
+
+
+    // High Score System
+    let hiScore = localStorage.getItem('earthHiScore') || 0;
+    document.getElementById('hi-score').innerText = hiScore;
+
+    function playSound(f, type, dur) {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = type; osc.frequency.value = f;
+            gain.gain.setValueAtTime(0.1, ctx.currentTime);
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.start(); osc.stop(ctx.currentTime + dur);
+        } catch(e) {}
+    }
+
+    
+
+    
+function updateSprite() {
+
+let row = 1;
+
+animFrame = (animFrame + 1) % 10;
+
+player.style.backgroundPosition =
+`-${animFrame * 64}px -${row * 64}px`;
+
+}
+   
+    
+
+    function initLevel(lvl) {
+        currentLevel = lvl; isPlaying = true; score = 0; time = 30;
+        document.querySelectorAll('.overlay').forEach(o => o.classList.remove('active'));
+        document.querySelectorAll('.item, .obs').forEach(i => i.remove());
+        
+        world.className = 'bg-level' + lvl;
+        document.getElementById('lvl-txt').innerText = "MISI " + lvl;
+        px = 45; 
+py = 45; 
+updatePlayerPos();
+player.style.backgroundPosition = "0px 0px";
+
+        if(lvl === 1) spawnItems(['🧴', '🥫', '🥡'], 8, "trash");
+        else if(lvl === 2) spawnItems(['🕳️'], 5, "hole");
+        else if(lvl === 3) spawnItems(['💡'], 6, "on");
+
+        spawnObstacles();
+startTimer();
+
+clearInterval(spriteInterval);
+spriteInterval = setInterval(updateSprite, 100);
+    }
+
+    function spawnItems(emojis, count, stage) {
+        for(let i=0; i<count; i++) {
+            let t = document.createElement('div'); t.className = 'item'; t.dataset.stage = stage;
+            t.innerHTML = emojis[Math.floor(Math.random()*emojis.length)];
+            t.style.left = (Math.random() * 80 + 5) + '%';
+            t.style.top = (Math.random() * 80 + 5) + '%';
+            world.appendChild(t);
+        }
+    }
+
+    function spawnObstacles() {
+        const obsEmoji = currentLevel === 1 ? '💨' : (currentLevel === 2 ? '🔥' : '🕷️');
+        for(let i=0; i<(currentLevel+1); i++) {
+            let o = document.createElement('div'); o.className = 'obs'; o.innerHTML = obsEmoji;
+            o.style.left = (Math.random() * 80) + '%'; o.style.top = (Math.random() * 80) + '%';
+            world.appendChild(o);
+        }
+        clearInterval(obsInterval);
+        obsInterval = setInterval(() => {
+            if(!isPlaying) return;
+            document.querySelectorAll('.obs').forEach(o => {
+                o.style.left = (Math.random() * 80 + 5) + '%';
+                o.style.top = (Math.random() * 80 + 5) + '%';
+            });
+        }, 1500);
+    }
+
+  function move(dir){
+if(!isPlaying) return;
+
+currentDir = dir;
+const speed = 2;
+
+if(dir === 'up') py -= speed;
+if(dir === 'down') py += speed;
+
+if(dir === 'left'){
+px -= speed;
+player.style.transform = 'scaleX(-1)';
+}
+
+if(dir === 'right'){
+px += speed;
+player.style.transform = 'scaleX(1)';
+}
+
+/* BATAS MAP DINAMIS */
+const worldRect = world.getBoundingClientRect();
+const playerRect = player.getBoundingClientRect();
+
+if(playerRect.left < worldRect.left) px += speed;
+if(playerRect.right > worldRect.right) px -= speed;
+if(playerRect.top < worldRect.top) py += speed;
+if(playerRect.bottom > worldRect.bottom) py -= speed;
+
+updatePlayerPos();
+checkCollision();
+}
+
+
+
+
+
+    
+
+    function updatePlayerPos() { 
+        player.style.left = px + '%'; 
+        player.style.top = py + '%'; 
+    }
+
+    ['up','down','left','right'].forEach(id => {
+        const el = document.getElementById(id);
+        el.onpointerdown = (e) => { 
+            e.preventDefault(); 
+            move(id); 
+            moveInterval = setInterval(() => move(id), 100); 
+        };
+        el.onpointerup = () => { 
+            clearInterval(moveInterval); 
+            currentDir = 'idle'; 
+        };
+    });
+
+    function checkCollision() {
+        const pRect = player.getBoundingClientRect();
+        
+        // Cek Item
+        document.querySelectorAll('.item').forEach(item => {
+            if(item.dataset.stage === "tree" || item.dataset.stage === "off") return;
+            if(isHit(pRect, item.getBoundingClientRect())) {
+                if(currentLevel === 1) { item.remove(); score += 10; playSound(800, 'sine', 0.1); }
+                else if(currentLevel === 2) {
+                    if(item.dataset.stage === "hole") { item.innerHTML = '🌱'; item.dataset.stage = "seed"; score += 5; }
+                    else { item.innerHTML = '🌳'; item.dataset.stage = "tree"; score += 20; playSound(600, 'sine', 0.2); }
+                }
+                else { item.innerHTML = '🔌'; item.dataset.stage = "off"; item.style.opacity = 0.4; score += 20; }
+                document.getElementById('score-txt').innerText = score;
+                checkWin();
+            }
+        });
+
+        // Cek Obstacle
+        document.querySelectorAll('.obs').forEach(o => {
+            if(isHit(pRect, o.getBoundingClientRect())) {
+                score = Math.max(0, score - 1);
+                document.getElementById('score-txt').innerText = score;
+                playSound(150, 'sawtooth', 0.1);
+            }
+        });
+    }
+
+    function isHit(r1, r2) { return !(r1.right < r2.left || r1.left > r2.right || r1.bottom < r2.top || r1.top > r2.bottom); }
+
+    function checkWin() {
+        let win = false;
+        if(currentLevel === 1) win = document.querySelectorAll('.item').length === 0;
+        if(currentLevel === 2) win = document.querySelectorAll('.item[data-stage="tree"]').length === 5;
+        if(currentLevel === 3) win = document.querySelectorAll('.item[data-stage="on"]').length === 0;
+        
+        if(win && isPlaying) {
+            isPlaying = false; clearInterval(timerInterval);
+            if(score > hiScore) { localStorage.setItem('earthHiScore', score); }
+            setTimeout(showEnd, 500);
+        }
+    }
+
+    function startTimer() {
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            if(!isPlaying) return;
+            time--; document.getElementById('timer-txt').innerText = time;
+            if(time <= 0) { isPlaying = false; alert("Waktu Habis!"); initLevel(currentLevel); }
+        }, 1000);
+    }
+
+    function showEnd() {
+        const screen = document.getElementById('end-screen');
+        screen.classList.add('active');
+        const msgs = ["Bagus! Sampah plastik berkurang.", "Hebat! Hutan mulai hijau kembali.", "Luar Biasa! Kamu pahlawan energi."];
+        document.getElementById('edu-msg').innerText = msgs[currentLevel-1];
+        const btn = document.getElementById('next-btn');
+        if(currentLevel < 3) {
+            btn.innerText = "MISI BERIKUTNYA";
+            btn.onclick = () => initLevel(currentLevel + 1);
+        } else {
+            btn.innerText = "MAIN LAGI";
+            btn.onclick = () => location.reload();
+        }
+    }
+</script>
+</body>
+</html>
